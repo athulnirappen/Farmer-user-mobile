@@ -1,56 +1,39 @@
-# Welcome to your Expo app 👋
+# Farmer mobile app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Buyer and farmer app, built with Expo (SDK 58), Expo Router and TanStack Query. It talks to the API in the sibling `back-end` repo.
 
-## Get started
+## Run on the Android emulator
 
-1. Install dependencies
+1. In `back-end`: `npm run db:up`, `npm run db:seed` (first time) and `npm run dev`.
+2. Start the emulator, then in this folder: `npm install` and `npm run android`.
 
-   ```bash
-   npm install
-   ```
+The emulator reaches the API at `10.0.2.2:3000` with no configuration. Expo Go must match the SDK: 58.x. Expo normally offers to update it, or update it from the Play Store.
 
-2. Start the app
+## Run on a real phone
 
-   ```bash
-   npx expo start
-   ```
+1. Copy `.env.example` to `.env.local` and put in your PC's Wi-Fi IP.
+2. Run `npm start` and scan the QR code with Expo Go. The phone and PC must be on the same Wi-Fi.
 
-In the output, you'll find options to open the app in a
+## Signing in locally
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+No SMS is sent. The 6-digit code appears in the `back-end` log as `Development OTP generated`. Seeded phone numbers:
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+| Number (type this) | Who |
+| --- | --- |
+| 9800000001 | Approved farmer |
+| 9800000002 | Pending farmer |
+| 9800000003 | Buyer |
 
-## Get a fresh project
+Any other number goes through registration. A code can be requested once a minute and five times an hour.
 
-When you're ready, run:
+## Testing "Near me" on the emulator
 
-```bash
-npm run reset-project
+The emulator's default position is in California, far from the seeded farms. Use a position near Thrissur (10.5276, 76.2144) from the emulator's Extended Controls > Location, then press Set Location.
+
+## Checks
+
 ```
-
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+npm run typecheck
+npm run lint
+npx expo-doctor
+```
