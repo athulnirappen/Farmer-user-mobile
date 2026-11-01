@@ -103,19 +103,28 @@ export const useDeleteProduct = (productId: string) => {
   });
 };
 
-export const useProductImages = (productId: string) => {
+const uploadProductImage = (productId: string, uri: string) => {
+  const form = new FormData();
+  // Expo's fetch needs a real file here; it refuses React Native's { uri, name, type } form.
+  // The API works the type out from the file's contents and ignores its name.
+  form.append('image', new File(uri) as unknown as Blob);
+  return api(`/products/${productId}/images`, { method: 'POST', form });
+};
+
+// Photos wait on the phone until Save, as a new product has no id to attach them to before that
+export const useUploadProductImages = () => {
   const queryClient = useQueryClient();
 
-  const add = useMutation({
-    mutationFn: (uri: string) => {
-      const form = new FormData();
-      // Expo's fetch needs a real file here; it refuses React Native's { uri, name, type } form.
-      // The API works the type out from the file's contents and ignores its name.
-      form.append('image', new File(uri) as unknown as Blob);
-      return api(`/products/${productId}/images`, { method: 'POST', form });
+  return useMutation({
+    mutationFn: async ({ productId, uris }: { productId: string; uris: string[] }) => {
+      for (const uri of uris) await uploadProductImage(productId, uri);
     },
-    onSuccess: () => refreshListings(queryClient),
+    onSettled: () => refreshListings(queryClient),
   });
+};
+
+export const useProductImages = (productId: string) => {
+  const queryClient = useQueryClient();
 
   const remove = useMutation({
     mutationFn: (imageId: string) =>
@@ -123,5 +132,5 @@ export const useProductImages = (productId: string) => {
     onSuccess: () => refreshListings(queryClient),
   });
 
-  return { add, remove };
+  return { remove };
 };

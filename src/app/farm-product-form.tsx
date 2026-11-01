@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { useCategories } from '@/api/categories';
 import { API_ORIGIN } from '@/api/client';
@@ -14,21 +14,84 @@ import {
   useMyProducts,
   useProductImages,
   useSaveProduct,
+  useUploadProductImages,
 } from '@/api/farmer';
 import type { OwnedProduct } from '@/api/types';
-import { Button, Chip, ErrorState, Field, Loading } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Text } from '@/components/text';
+import { Button, Card, Chip, ErrorState, Eyebrow, Field, Loading, Pill } from '@/components/ui';
+import { Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { errorMessage } from '@/utils/format';
 
 const MAX_IMAGES = 5;
 
-function Photos({ product }: { product: OwnedProduct }) {
+// Opened from a link there's no screen behind this one to return to
+const leave = () => (router.canGoBack() ? router.back() : router.replace('/farm-products'));
+
+type PhotosProps = {
+  product?: OwnedProduct;
+  pending: string[];
+  onPendingChange: (uris: string[]) => void;
+  disabled: boolean;
+};
+
+function SavedPhoto({ productId, image, cover, disabled }: {
+  productId: string;
+  image: OwnedProduct['images'][number];
+  cover: boolean;
+  disabled: boolean;
+}) {
+  const { remove } = useProductImages(productId);
+
+  return (
+    <PhotoTile
+      source={`${API_ORIGIN}${image.url}`}
+      cover={cover}
+      disabled={disabled || remove.isPending}
+      error={remove.error}
+      onRemove={() => remove.mutate(image.id)}
+    />
+  );
+}
+
+type PhotoTileProps = {
+  source: string;
+  cover: boolean;
+  disabled: boolean;
+  error?: unknown;
+  onRemove: () => void;
+};
+
+function PhotoTile({ source, cover, disabled, error, onRemove }: PhotoTileProps) {
   const colors = useTheme();
-  const { add, remove } = useProductImages(product.id);
+
+  return (
+    <View style={styles.photoTile}>
+      <Image source={source} style={styles.photo} contentFit="cover" />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Remove photo"
+        disabled={disabled}
+        onPress={onRemove}
+        hitSlop={8}
+        style={[styles.removePhoto, { backgroundColor: colors.surface }]}>
+        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+      </Pressable>
+      {cover && (
+        <View style={[styles.cover, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.coverLabel, { color: colors.text }]}>Cover</Text>
+        </View>
+      )}
+      {!!error && <Text style={{ color: colors.danger }}>{errorMessage(error)}</Text>}
+    </View>
+  );
+}
+
+function Photos({ product, pending, onPendingChange, disabled }: PhotosProps) {
+  const colors = useTheme();
   const [pickError, setPickError] = useState<string>();
-  const busy = add.isPending || remove.isPending;
-  const error = pickError ?? (add.error || remove.error ? errorMessage(add.error ?? remove.error) : null);
+  const saved = product?.images ?? [];
+  const count = saved.length + pending.length;
 
   const pick = async (source: 'library' | 'camera') => {
     setPickError(undefined);
@@ -47,48 +110,95 @@ function Photos({ product }: { product: OwnedProduct }) {
       source === 'camera'
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
-    if (!result.canceled) add.mutate(result.assets[0].uri);
+    if (!result.canceled) onPendingChange([...pending, result.assets[0].uri]);
   };
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Photos ({product.images.length} of {MAX_IMAGES})
-      </Text>
-      <View style={styles.photos}>
-        {product.images.map((image) => (
-          <View key={image.id}>
-            <Image source={`${API_ORIGIN}${image.url}`} style={styles.photo} contentFit="cover" />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Remove photo"
-              disabled={busy}
-              onPress={() => remove.mutate(image.id)}
-              hitSlop={8}
-              style={[styles.removePhoto, { backgroundColor: colors.background }]}>
-              <Ionicons name="close" size={18} color={colors.danger} />
-            </Pressable>
-          </View>
-        ))}
+      <View style={styles.photosHead}>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Photos (optional)</Text>
+        <Pill label={`${count} of ${MAX_IMAGES}`} tone="success" />
       </View>
-      {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      {product.images.length < MAX_IMAGES && (
-        <View style={styles.photoButtons}>
-          <Button
-            label="Choose a photo"
-            variant="plain"
-            busy={add.isPending}
-            disabled={busy}
-            onPress={() => pick('library')}
-          />
-          <Button
-            label="Take a photo"
-            variant="plain"
-            disabled={busy}
-            onPress={() => pick('camera')}
-          />
+      {count > 0 && (
+        <View style={styles.photos}>
+          {product &&
+            saved.map((image, index) => (
+              <SavedPhoto
+                key={image.id}
+                productId={product.id}
+                image={image}
+                cover={index === 0}
+                disabled={disabled}
+              />
+            ))}
+          {pending.map((uri, index) => (
+            <PhotoTile
+              key={uri}
+              source={uri}
+              cover={saved.length === 0 && index === 0}
+              disabled={disabled}
+              onRemove={() => onPendingChange(pending.filter((other) => other !== uri))}
+            />
+          ))}
         </View>
       )}
+      {pickError && <Text style={{ color: colors.danger }}>{pickError}</Text>}
+      {count < MAX_IMAGES && (
+        <View style={styles.photoButtons}>
+          <View style={styles.choosePhoto}>
+            <Button
+              label="Choose a photo"
+              icon="images-outline"
+              variant="soft"
+              disabled={disabled}
+              onPress={() => pick('library')}
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Take a photo"
+            disabled={disabled}
+            onPress={() => pick('camera')}
+            style={[styles.camera, { backgroundColor: colors.primarySoft }, disabled && styles.dim]}>
+            <Ionicons name="camera-outline" size={22} color={colors.primary} />
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const UNITS = ['kg', 'litre', 'dozen', 'bunch'];
+
+function StockField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const colors = useTheme();
+  const count = Number(value) || 0;
+  const step = (label: string, icon: 'remove' | 'add', next: number) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={next < 0}
+      hitSlop={4}
+      onPress={() => onChange(String(next))}
+      style={[styles.stockStep, next < 0 && styles.dim]}>
+      <Ionicons name={icon} size={20} color={colors.primary} />
+    </Pressable>
+  );
+
+  return (
+    <View style={styles.rowField}>
+      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Stock</Text>
+      <View style={[styles.stock, { backgroundColor: colors.primarySoft }]}>
+        {step('Decrease stock', 'remove', count - 1)}
+        <TextInput
+          accessibilityLabel="Stock"
+          value={value}
+          onChangeText={(text) => onChange(text.replace(/\D/g, ''))}
+          keyboardType="number-pad"
+          style={[styles.stockInput, { color: colors.text }]}
+        />
+        {step('Increase stock', 'add', count + 1)}
+      </View>
     </View>
   );
 }
@@ -103,9 +213,13 @@ function ProductForm({ product }: { product?: OwnedProduct }) {
   const [price, setPrice] = useState(product ? String(Number(product.price)) : '');
   const [unit, setUnit] = useState(product?.unit ?? '');
   const [stock, setStock] = useState(product ? String(product.stock) : '');
+  const [customUnit, setCustomUnit] = useState(!!product && !UNITS.includes(product.unit));
   const [categoryId, setCategoryId] = useState(product?.category.id);
   const [isActive, setIsActive] = useState(product?.isActive ?? true);
   const [accepted, setAccepted] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
+  const upload = useUploadProductImages();
+  const saving = save.isPending || upload.isPending;
 
   const details = {
     name: name.trim(),
@@ -138,12 +252,36 @@ function ProductForm({ product }: { product?: OwnedProduct }) {
     stock !== '' &&
     Number.isInteger(stockCount) &&
     stockCount >= 0;
-  const ready =
-    valid &&
-    (describes || stockChanged || pauseChanged) &&
-    (!describes || (accepted && declaration.data !== undefined));
+  const fieldsChanged = describes || stockChanged || pauseChanged;
+  const changed = fieldsChanged || pendingPhotos.length > 0;
+  const ready = valid && changed && (!describes || (accepted && declaration.data !== undefined));
+  const finished = !!product && !changed;
+
+  const finish = (productId: string) => {
+    if (pendingPhotos.length === 0) {
+      leave();
+      return;
+    }
+
+    upload.mutate(
+      { productId, uris: pendingPhotos },
+      {
+        onSuccess: leave,
+        onError: (error) => {
+          setPendingPhotos([]);
+          Alert.alert('A photo was not added', `The product is saved. ${errorMessage(error)}`);
+          if (!product) router.replace({ pathname: '/farm-product-form', params: { id: productId } });
+        },
+      }
+    );
+  };
 
   const submit = () => {
+    if (product && !fieldsChanged) {
+      finish(product.id);
+      return;
+    }
+
     const body: ProductChanges = {
       ...changedDetails,
       ...((!product || stockChanged) && { stock: stockCount }),
@@ -157,9 +295,7 @@ function ProductForm({ product }: { product?: OwnedProduct }) {
     save.mutate(body, {
       onSuccess: (saved) => {
         setAccepted(false);
-        // A new product can have photos now that it exists
-        if (product) router.back();
-        else router.replace({ pathname: '/farm-product-form', params: { id: saved.id } });
+        finish(saved.id);
       },
     });
   };
@@ -167,59 +303,125 @@ function ProductForm({ product }: { product?: OwnedProduct }) {
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: product ? 'Edit product' : 'New product' }} />
-      <Field label="Name" value={name} onChangeText={setName} maxLength={120} />
-      <Field
-        label="Description (optional)"
-        value={description}
-        onChangeText={setDescription}
-        multiline
-        maxLength={2000}
-      />
-      <View style={styles.row}>
-        <View style={styles.rowField}>
-          <Field label="Price in ₹" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-        </View>
-        <View style={styles.rowField}>
-          <Field label="Sold per, e.g. kg" value={unit} onChangeText={setUnit} maxLength={20} />
-        </View>
-      </View>
-      <Field label="Stock" value={stock} onChangeText={setStock} keyboardType="number-pad" />
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Category</Text>
-        {categories.isError && (
-          <Button label="Try again" variant="plain" onPress={() => categories.refetch()} />
-        )}
-        <View style={styles.chips}>
-          {categories.data?.items.map((category) => (
-            <Chip
-              key={category.id}
-              label={category.name}
-              selected={category.id === categoryId}
-              onPress={() => setCategoryId(category.id)}
-            />
-          ))}
-        </View>
-      </View>
 
       {product && (
-        <View style={styles.switchRow}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Show to buyers</Text>
+        <Card style={styles.switchCard}>
+          <View style={styles.switchText}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Show to buyers</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {isActive ? 'Buyers can see and order this' : 'Paused, so buyers can\'t see it'}
+            </Text>
+          </View>
           <Switch
             accessibilityLabel="Show to buyers"
             value={isActive}
             onValueChange={setIsActive}
+            trackColor={{ true: colors.primary }}
+            thumbColor={colors.onHero}
           />
-        </View>
+        </Card>
       )}
 
-      {describes && (
+      <Card style={styles.card}>
+        <Field label="Product name" value={name} onChangeText={setName} maxLength={120} />
+
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Declaration</Text>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Category</Text>
+          {categories.isError && (
+            <Button label="Try again" variant="plain" onPress={() => categories.refetch()} />
+          )}
+          <View style={styles.chips}>
+            {categories.data?.items.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.name}
+                icon={category.id === categoryId ? 'checkmark' : undefined}
+                selected={category.id === categoryId}
+                onPress={() => setCategoryId(category.id)}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Sold per</Text>
+          <View style={styles.units}>
+            {UNITS.map((option) => {
+              const selected = !customUnit && unit === option;
+
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    setCustomUnit(false);
+                    setUnit(option);
+                  }}
+                  style={[
+                    styles.unit,
+                    { backgroundColor: selected ? colors.primary : colors.primarySoft },
+                  ]}>
+                  <Text style={[styles.unitLabel, { color: selected ? colors.onPrimary : colors.text }]}>
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              setCustomUnit(!customUnit);
+              setUnit('');
+            }}>
+            <Text style={[styles.otherUnit, { color: colors.accent }]}>
+              {customUnit ? 'Choose from the list' : 'Use another unit'}
+            </Text>
+          </Pressable>
+          {customUnit && (
+            <Field label="Unit" value={unit} onChangeText={setUnit} maxLength={20} placeholder="e.g. packet" />
+          )}
+        </View>
+
+        <View style={styles.row}>
+          <View style={styles.rowField}>
+            <Field
+              label={unit ? `Price in ₹ per ${unit}` : 'Price in ₹'}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <StockField value={stock} onChange={setStock} />
+        </View>
+
+        <Field
+          label="Description (optional)"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          maxLength={2000}
+        />
+
+        <Photos
+          product={product}
+          pending={pendingPhotos}
+          onPendingChange={setPendingPhotos}
+          disabled={saving}
+        />
+      </Card>
+
+      {describes && (
+        <View style={[styles.declaration, { backgroundColor: colors.warningSoft }]}>
+          <Eyebrow label="Seller declaration" color={colors.warning} />
           {declaration.isError ? (
             <Text style={{ color: colors.danger }}>{errorMessage(declaration.error)}</Text>
           ) : (
-            <Text style={{ color: colors.textSecondary }}>{declaration.data?.text}</Text>
+            <View style={[styles.declarationText, { backgroundColor: colors.surface }]}>
+              <Text style={{ color: colors.text }}>{declaration.data?.text}</Text>
+            </View>
           )}
           <Pressable
             accessibilityRole="checkbox"
@@ -239,9 +441,23 @@ function ProductForm({ product }: { product?: OwnedProduct }) {
       )}
 
       {save.isError && <Text style={{ color: colors.danger }}>{errorMessage(save.error)}</Text>}
-      <Button label="Save" busy={save.isPending} disabled={!ready} onPress={submit} />
+      {describes && !accepted && (
+        <Text style={[styles.acceptHint, { color: colors.warning }]}>
+          Accept the declaration above to save.
+        </Text>
+      )}
+      {finished ? (
+        <Button label="Done" icon="checkmark" onPress={leave} />
+      ) : (
+        <Button
+          label="Save product"
+          icon="save-outline"
+          busy={saving}
+          disabled={!ready}
+          onPress={submit}
+        />
+      )}
 
-      {product && <Photos product={product} />}
       {product && <DeleteProduct product={product} />}
     </ScrollView>
   );
@@ -264,7 +480,13 @@ function DeleteProduct({ product }: { product: OwnedProduct }) {
   return (
     <View>
       {remove.isError && <Text style={{ color: colors.danger }}>{errorMessage(remove.error)}</Text>}
-      <Button label="Delete product" variant="plain" busy={remove.isPending} onPress={confirm} />
+      <Button
+        label="Delete product"
+        icon="trash-outline"
+        variant="danger"
+        busy={remove.isPending}
+        onPress={confirm}
+      />
     </View>
   );
 }
@@ -287,26 +509,70 @@ export default function FarmProductFormScreen() {
 }
 
 const styles = StyleSheet.create({
-  form: { padding: Spacing.three, gap: Spacing.three },
-  row: { flexDirection: 'row', gap: Spacing.three },
-  rowField: { flex: 1 },
+  form: { padding: Spacing.three, gap: 14 },
+  card: { padding: Spacing.three, gap: 14 },
+  row: { flexDirection: 'row', gap: 12 },
+  rowField: { flex: 1, gap: Spacing.two },
   section: { gap: Spacing.two },
-  sectionTitle: { fontSize: 16, fontWeight: '600' },
+  sectionTitle: { fontSize: 20, fontFamily: Fonts.display },
+  fieldLabel: { fontSize: 14, fontFamily: Fonts.medium },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  accept: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minHeight: 44 },
-  acceptLabel: { flex: 1, fontSize: 16 },
-  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  photo: { width: 96, height: 96, borderRadius: 10 },
-  removePhoto: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  units: { flexDirection: 'row', gap: Spacing.two },
+  unit: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Radius.small,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoButtons: { flexDirection: 'row', flexWrap: 'wrap' },
+  unitLabel: { fontSize: 14, fontFamily: Fonts.medium },
+  otherUnit: { fontSize: 14, fontFamily: Fonts.semibold },
+  stock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
+    borderRadius: Radius.medium,
+  },
+  stockStep: { width: 40, height: 52, alignItems: 'center', justifyContent: 'center' },
+  stockInput: { flex: 1, padding: 0, fontSize: 16, fontFamily: Fonts.semibold, textAlign: 'center' },
+  dim: { opacity: 0.45 },
+  switchCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.three },
+  switchText: { flex: 1 },
+  declaration: { padding: Spacing.three, gap: 12, borderRadius: Radius.large },
+  declarationText: { padding: 14, borderRadius: Radius.small },
+  accept: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  acceptLabel: { flex: 1, fontSize: 16 },
+  acceptHint: { textAlign: 'center' },
+  photosHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  photoTile: { width: '48.5%' },
+  photo: { width: '100%', aspectRatio: 1, borderRadius: Radius.medium },
+  removePhoto: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cover: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.round,
+  },
+  coverLabel: { fontSize: 12, fontFamily: Fonts.medium },
+  photoButtons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  choosePhoto: { flex: 1 },
+  camera: {
+    width: 54,
+    height: 54,
+    borderRadius: Radius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
