@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { type DimensionValue, StyleSheet, View } from 'react-native';
 
-import { API_ORIGIN } from '@/api/client';
+import { imageUrl } from '@/api/client';
 import type { Product } from '@/api/types';
 import type { IconName } from '@/components/ui';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -45,10 +45,9 @@ export function ProductImage({ product, style }: Props) {
     );
   }
 
-  // The API stores image URLs relative to its own origin
   return (
     <Image
-      source={`${API_ORIGIN}${image.url}`}
+      source={imageUrl(image.url)}
       style={style}
       contentFit="cover"
       transition={150}

@@ -10,6 +10,9 @@ export const API_ORIGIN =
   (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000');
 const API_URL = `${API_ORIGIN}/api/v1`;
 
+// Hosted images are absolute (Supabase Storage); locally stored ones are relative to the API
+export const imageUrl = (url: string) => (/^https?:\/\//.test(url) ? url : `${API_ORIGIN}${url}`);
+
 const REFRESH_TOKEN_KEY = 'farmer.refreshToken';
 
 export class ApiError extends Error {

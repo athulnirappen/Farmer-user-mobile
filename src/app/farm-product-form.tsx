@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { useCategories } from '@/api/categories';
-import { API_ORIGIN } from '@/api/client';
+import { imageUrl } from '@/api/client';
 import {
   type ProductChanges,
   useDeclaration,
@@ -45,7 +45,7 @@ function SavedPhoto({ productId, image, cover, disabled }: {
 
   return (
     <PhotoTile
-      source={`${API_ORIGIN}${image.url}`}
+      source={imageUrl(image.url)}
       cover={cover}
       disabled={disabled || remove.isPending}
       error={remove.error}
