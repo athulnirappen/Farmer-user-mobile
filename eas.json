@@ -10,7 +10,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "https://api.yourdomain.in"
+        "EXPO_PUBLIC_API_ORIGIN": "https://farmer-api-chyv.onrender.com"
       }
     },
     "production": {
@@ -19,7 +19,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_ORIGIN": "https://api.yourdomain.in"
+        "EXPO_PUBLIC_API_ORIGIN": "https://farmer-api-chyv.onrender.com"
       }
     }
   }
